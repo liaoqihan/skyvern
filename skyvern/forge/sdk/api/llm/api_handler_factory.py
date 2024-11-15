@@ -30,6 +30,7 @@ class LLMAPIHandlerFactory:
     @staticmethod
     def get_llm_api_handler_with_router(llm_key: str) -> LLMAPIHandler:
         llm_config = LLMConfigRegistry.get_config(llm_key)
+        LOG.info(f"llm_config:{llm_config}, llm_key:{llm_key}")
         if not isinstance(llm_config, LLMRouterConfig):
             raise InvalidLLMConfigError(llm_key)
 
@@ -153,7 +154,7 @@ class LLMAPIHandlerFactory:
     @staticmethod
     def get_llm_api_handler(llm_key: str, base_parameters: dict[str, Any] | None = None) -> LLMAPIHandler:
         llm_config = LLMConfigRegistry.get_config(llm_key)
-
+        
         if LLMConfigRegistry.is_router_config(llm_key):
             return LLMAPIHandlerFactory.get_llm_api_handler_with_router(llm_key)
 
@@ -214,6 +215,7 @@ class LLMAPIHandlerFactory:
                     model=llm_config.model_name,
                     messages=messages,
                     timeout=SettingsManager.get_settings().LLM_CONFIG_TIMEOUT,
+                    extra_headers = {"empId":"329728"},
                     **active_parameters,
                 )
                 LOG.info("LLM API call successful", llm_key=llm_key, model=llm_config.model_name)

@@ -1,3 +1,4 @@
+ 
 // Commands for manipulating rects.
 // Want to debug this? Run chromium, go to sources, and create a new snippet with the code in domUtils.js
 class Rect {
@@ -202,7 +203,7 @@ function isElementStyleVisibilityVisible(element, style) {
   style = style ?? getElementComputedStyle(element);
   if (!style) return true;
   if (
-    !element.checkVisibility({ checkOpacity: false, checkVisibilityCSS: false })
+    !element.checkVisibility({ checkOpacity: true, checkVisibilityCSS: true })
   )
     return false;
   if (style.visibility !== "visible") return false;
@@ -267,6 +268,15 @@ function isElementVisible(element) {
   // }
 
   return true;
+}
+
+//juexin： 被覆盖的元素也为不可见
+function isOnTop(element) {
+  const rect = element.getBoundingClientRect();
+  const centerX = rect.left + rect.width / 2;
+  const centerY = rect.top + rect.height / 2;
+  const topElement = document.elementFromPoint(centerX, centerY);
+  return element === topElement || element.contains(topElement);
 }
 
 function isHidden(element) {
@@ -399,7 +409,9 @@ function isInteractable(element) {
   if (isScriptOrStyle(element)) {
     return false;
   }
-
+  if (!isOnTop(element)) {
+    return false;
+  }
   if (hasWidgetRole(element)) {
     return true;
   }
@@ -967,7 +979,18 @@ function buildTreeFromBody(frame = "main.frame") {
   return buildElementTree(document.body, frame);
 }
 
-function buildElementTree(starter = document.body, frame, full_tree = false) {
+//juexin:便于调试
+function getSkyvernElementById(id,index=0) {
+  var elementsOrResultArray = buildTreeFromBody()[index];
+  for (var i = 0; i < elementsOrResultArray.length; i++) {
+    var element = elementsOrResultArray[i];
+    if (element.id === id) {
+      return element;
+    }
+  }
+}
+
+function buildElementTree(starter = document.body, frame="main.frame", full_tree = false) {
   var elements = [];
   var resultArray = [];
 
@@ -991,11 +1014,12 @@ function buildElementTree(starter = document.body, frame, full_tree = false) {
 
     // if element is an "a" tag and has a target="_blank" attribute, remove the target attribute
     // We're doing this so that skyvern can do all the navigation in a single page/tab and not open new tab
-    if (element.tagName.toLowerCase() === "a") {
-      if (element.getAttribute("target") === "_blank") {
-        element.removeAttribute("target");
-      }
-    }
+    //juexin: 可以打开新标签页
+    // if (element.tagName.toLowerCase() === "a") {
+    //   if (element.getAttribute("target") === "_blank") {
+    //     element.removeAttribute("target");
+    //   }
+    // }
 
     // Check if the element is interactable
     if (isInteractable(element)) {
@@ -1048,6 +1072,7 @@ function buildElementTree(starter = document.body, frame, full_tree = false) {
       if (
         isElementVisible(element) &&
         !isHidden(element) &&
+        isOnTop(element) &&
         !isScriptOrStyle(element)
       ) {
         let elementObj = null;
@@ -1409,7 +1434,15 @@ function getCaptchaSolves() {
   }
   return window["captchaSolvedCounter"];
 }
-
+//juexin：+5 只有相交一定程度才算重叠
+function recContains(rect1, rect2) {
+  return (
+    rect1.left < rect2.left+5 &&
+    rect1.right > rect2.right+5 &&
+    rect1.top < rect2.top+5 &&
+    rect1.bottom > rect2.bottom+5
+  );
+}
 function groupElementsVisually(elements) {
   const groups = [];
   // o n^2
@@ -1421,7 +1454,10 @@ function groupElementsVisually(elements) {
     }
     const group = groups.find((group) => {
       for (const groupElement of group.elements) {
-        if (Rect.intersects(groupElement.rect, element.rect)) {
+        if (Rect.intersects(groupElement.rect, element.rect)
+        && !recContains(groupElement.rect, element.rect)
+        && !recContains(element.rect, groupElement.rect)
+        ) {
           return true;
         }
       }
@@ -1443,6 +1479,30 @@ function groupElementsVisually(elements) {
 
   return groups;
 }
+
+
+function groupElementsVisuallyTest(elements) {
+  const groups = [];
+  // o n^2
+  // go through each hint and see if it overlaps with any other hints, if it does, add it to the group of the other hint
+  // *** if we start from the bigger elements (top -> bottom) we can avoid merging groups
+  for (const element of elements) {
+    if (!element.rect) {
+      continue;
+    }
+    groups.push({
+      elements: [element],
+    });
+  }
+
+  // go through each group and create a rectangle that encompasses all the hints in the group
+  for (const group of groups) {
+    group.rect = createRectangleForGroup(group);
+  }
+
+  return groups;
+}
+
 
 function createRectangleForGroup(group) {
   const rects = group.elements.map((element) => element.rect);
@@ -1528,11 +1588,11 @@ function createHintMarkerForGroup(group) {
   // yellow annotation box with string
   const el = document.createElement("div");
   el.style.position = "absolute";
-  el.style.left = group.rect.left + scrollLeft + "px";
-  el.style.top = group.rect.top + scrollTop + "px";
+  el.style.left = Math.max(0, group.rect.left + scrollLeft - 20) + "px";
+  el.style.top = Math.max(0, group.rect.top + scrollTop - 20) + "px";
   // Each group is assigned a different incremental z-index, we use the same z-index for the
   // bounding box and the hint marker
-  el.style.zIndex = this.currentZIndex;
+  el.style.zIndex = 99999999;
 
   // The bounding box around the group of hints.
   const boundingBox = document.createElement("div");
@@ -1548,7 +1608,7 @@ function createHintMarkerForGroup(group) {
   boundingBox.style.right = boundingBox.style.left + boundingBox.style.width;
   boundingBox.style.border = "2px solid blue"; // Change the border color as needed
   boundingBox.style.pointerEvents = "none"; // Ensures the box doesn't interfere with other interactions
-  boundingBox.style.zIndex = this.currentZIndex++;
+  boundingBox.style.zIndex = 999999999;
 
   return Object.assign(marker, {
     element: el,
