@@ -41,13 +41,24 @@ class Rect {
 
   // Determine whether two rects overlap.
   static intersects(rect1, rect2) {
-    return (
+    return (  
       rect1.right > rect2.left &&
       rect1.left < rect2.right &&
       rect1.bottom > rect2.top &&
       rect1.top < rect2.bottom
     );
   }
+
+  static intersectsMargin(rect1, rect2) {
+    const margin = 0;
+    return (  
+      rect1.right+margin > rect2.left &&
+      rect1.left < rect2.right+margin &&
+      rect1.bottom+margin > rect2.top &&
+      rect1.top < rect2.bottom+margin
+    );
+  }
+
 
   static equals(rect1, rect2) {
     for (const property of [
@@ -423,7 +434,9 @@ function isInteractable(element) {
   const tagName = element.tagName.toLowerCase();
 
   if (tagName === "iframe") {
-    return false;
+    // return false;
+    //juexin 
+    return true;
   }
 
   if (tagName === "a" && element.href) {
@@ -1388,7 +1401,8 @@ function buildElementTree(starter = document.body, frame="main.frame", full_tree
     }
 
     // FIXME: skip <a> for now to prevent navigating to other page by mistake
-    if (element.tagName !== "a" && checkStringIncludeRequire(context)) {
+    // juexin：不skip
+    if (checkStringIncludeRequire(context)) {
       if (
         !element.attributes["required"] &&
         !element.attributes["aria-required"]
@@ -1410,7 +1424,9 @@ function buildElementTree(starter = document.body, frame="main.frame", full_tree
 function drawBoundingBoxes(elements) {
   // draw a red border around the elements
   var groups = groupElementsVisually(elements);
+  console.log(groups)
   var hintMarkers = createHintMarkersForGroups(groups);
+  console.log(hintMarkers)
   addHintMarkersToPage(hintMarkers);
 }
 
@@ -1418,6 +1434,7 @@ function buildElementsAndDrawBoundingBoxes() {
   var elementsAndResultArray = buildTreeFromBody();
   drawBoundingBoxes(elementsAndResultArray[0]);
 }
+
 
 function captchaSolvedCallback() {
   console.log("captcha solved");
@@ -1434,15 +1451,7 @@ function getCaptchaSolves() {
   }
   return window["captchaSolvedCounter"];
 }
-//juexin：+5 只有相交一定程度才算重叠
-function recContains(rect1, rect2) {
-  return (
-    rect1.left < rect2.left+5 &&
-    rect1.right > rect2.right+5 &&
-    rect1.top < rect2.top+5 &&
-    rect1.bottom > rect2.bottom+5
-  );
-}
+
 function groupElementsVisually(elements) {
   const groups = [];
   // o n^2
@@ -1454,14 +1463,14 @@ function groupElementsVisually(elements) {
     }
     const group = groups.find((group) => {
       for (const groupElement of group.elements) {
-        if (Rect.intersects(groupElement.rect, element.rect)
-        && !recContains(groupElement.rect, element.rect)
-        && !recContains(element.rect, groupElement.rect)
+
+        if (
+          !Rect.intersects(groupElement.rect, element.rect)
         ) {
-          return true;
+          return false
         }
       }
-      return false;
+      return true;
     });
     if (group) {
       group.elements.push(element);
@@ -1479,28 +1488,8 @@ function groupElementsVisually(elements) {
 
   return groups;
 }
-
-
-function groupElementsVisuallyTest(elements) {
-  const groups = [];
-  // o n^2
-  // go through each hint and see if it overlaps with any other hints, if it does, add it to the group of the other hint
-  // *** if we start from the bigger elements (top -> bottom) we can avoid merging groups
-  for (const element of elements) {
-    if (!element.rect) {
-      continue;
-    }
-    groups.push({
-      elements: [element],
-    });
-  }
-
-  // go through each group and create a rectangle that encompasses all the hints in the group
-  for (const group of groups) {
-    group.rect = createRectangleForGroup(group);
-  }
-
-  return groups;
+function getGroupElements() {
+  return groupElementsVisually(buildTreeFromBody()[0])
 }
 
 
@@ -1579,6 +1568,7 @@ function createHintMarkersForGroups(groups) {
   return hintMarkers;
 }
 
+defaultZIndex = 9999999;
 function createHintMarkerForGroup(group) {
   // Calculate the position of the element relative to the document
   var scrollTop = window.pageYOffset || document.documentElement.scrollTop;
@@ -1588,11 +1578,12 @@ function createHintMarkerForGroup(group) {
   // yellow annotation box with string
   const el = document.createElement("div");
   el.style.position = "absolute";
+  // juexin: 改为框外左上角
   el.style.left = Math.max(0, group.rect.left + scrollLeft - 20) + "px";
   el.style.top = Math.max(0, group.rect.top + scrollTop - 20) + "px";
   // Each group is assigned a different incremental z-index, we use the same z-index for the
   // bounding box and the hint marker
-  el.style.zIndex = 99999999;
+  el.style.zIndex = defaultZIndex
 
   // The bounding box around the group of hints.
   const boundingBox = document.createElement("div");
@@ -1608,7 +1599,7 @@ function createHintMarkerForGroup(group) {
   boundingBox.style.right = boundingBox.style.left + boundingBox.style.width;
   boundingBox.style.border = "2px solid blue"; // Change the border color as needed
   boundingBox.style.pointerEvents = "none"; // Ensures the box doesn't interfere with other interactions
-  boundingBox.style.zIndex = 999999999;
+  boundingBox.style.zIndex = defaultZIndex++;
 
   return Object.assign(marker, {
     element: el,
