@@ -1,8 +1,11 @@
 from __future__ import annotations
 
 import asyncio
+import base64
 import time
 from typing import Any, Dict, List
+
+import requests
 
 import structlog
 from playwright._impl._errors import TimeoutError
@@ -45,6 +48,42 @@ class SkyvernFrame:
         except asyncio.TimeoutError:
             LOG.exception("Timeout to evaluate expression", expression=expression)
             raise TimeoutError("timeout to evaluate expression")
+        
+
+    def save_base64_to_image(base64_string, output_path):
+        # 去掉可能存在的前缀，比如 "data:image/png;base64,"
+        if ',' in base64_string:
+            base64_string = base64_string.split(',', 1)[1]
+        
+        # 解码 Base64 字符串
+        image_data = base64.b64decode(base64_string)
+        
+        # 将解码后的数据写入到文件
+        with open(output_path, 'wb') as image_file:
+            image_file.write(image_data)
+
+    def upload_oos_file(encoded_files:list,return_files=True):
+        import requests
+        import base64
+        url = "http://xl.alibaba-inc.com/open/api/uploadFile"
+
+        files_data = [
+            {
+                'filename': "xxx",
+                'content': base64.b64encode(encoded_files).decode('utf-8')
+            }
+        ]
+        response = requests.post(url, json=files_data)
+
+        if response.status_code == 200 and response.json().get("success"):
+            # 解析响应的 JSON 数据
+            result = response.json()
+            if return_files:
+                return result.get("files")
+            return result
+        else:
+            print("upload_oos_file Failed. Status code:", response.status_code)
+            print("Response:", response.text)
 
     @staticmethod
     async def take_screenshot(

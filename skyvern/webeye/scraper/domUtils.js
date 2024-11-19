@@ -41,11 +41,12 @@ class Rect {
 
   // Determine whether two rects overlap.
   static intersects(rect1, rect2) {
+    const margin = 0;
     return (  
-      rect1.right > rect2.left &&
-      rect1.left < rect2.right &&
-      rect1.bottom > rect2.top &&
-      rect1.top < rect2.bottom
+      rect1.right+margin > rect2.left &&
+      rect1.left-margin < rect2.right &&
+      rect1.bottom+margin > rect2.top &&
+      rect1.top-margin < rect2.bottom
     );
   }
 
@@ -287,7 +288,13 @@ function isOnTop(element) {
   const centerX = rect.left + rect.width / 2;
   const centerY = rect.top + rect.height / 2;
   const topElement = document.elementFromPoint(centerX, centerY);
-  return element === topElement || element.contains(topElement);
+
+  if (element.tagName.toLowerCase() === "input") {
+    // jueixn：兼容搜索底纹词
+    return true
+  }
+  return  element === topElement || element.contains(topElement);
+
 }
 
 function isHidden(element) {
@@ -430,7 +437,6 @@ function isInteractable(element) {
   if (isInteractableInput(element)) {
     return true;
   }
-
   const tagName = element.tagName.toLowerCase();
 
   if (tagName === "iframe") {
@@ -1424,10 +1430,21 @@ function buildElementTree(starter = document.body, frame="main.frame", full_tree
 function drawBoundingBoxes(elements) {
   // draw a red border around the elements
   var groups = groupElementsVisually(elements);
-  console.log(groups)
+  console.log("groups",groups)
   var hintMarkers = createHintMarkersForGroups(groups);
-  console.log(hintMarkers)
+  console.log("hintMarkers",hintMarkers)
   addHintMarkersToPage(hintMarkers);
+}
+
+function getGroupByHingString(hintString) {
+  // draw a red border around the elements
+  var groups = getGroupElements();
+  var hintMarkers = createHintMarkersForGroups(groups);
+  for (const group of hintMarkers) {
+    if (group.hintString == hintString) {
+      return group;
+    }
+  }
 }
 
 function buildElementsAndDrawBoundingBoxes() {
@@ -1461,24 +1478,32 @@ function groupElementsVisually(elements) {
     if (!element.rect) {
       continue;
     }
-    const group = groups.find((group) => {
-      for (const groupElement of group.elements) {
-
-        if (
-          !Rect.intersects(groupElement.rect, element.rect)
-        ) {
-          return false
+    if (element.tagName.toUpperCase() != "INPUT") {
+      const group = groups.find((group) => {
+        for (const groupElement of group.elements) {
+  
+          if (
+            !Rect.intersects(groupElement.rect, element.rect)
+          ) {
+            return false
+          }
         }
+        return true;
+      });
+      if (group) {
+        group.elements.push(element);
+      } else {
+        groups.push({
+          elements: [element],
+        });
       }
-      return true;
-    });
-    if (group) {
-      group.elements.push(element);
     } else {
+      // jueixn：搜索框不合并
       groups.push({
         elements: [element],
       });
     }
+
   }
 
   // go through each group and create a rectangle that encompasses all the hints in the group
@@ -1520,14 +1545,14 @@ function generateHintStrings(count) {
   return hintStrings.sort(); // .map((str) => str.reverse())
 }
 
-function createHintMarkersForGroups(groups) {
+function createHintMarkersForGroups(groups,drawInteractable=false) {
   if (groups.length === 0) {
     console.log("No groups found, not adding hint markers to page.");
     return [];
   }
 
   const hintMarkers = groups
-    .filter((group) => group.elements.some((element) => element.interactable))
+    .filter((group) => group.elements.some((element) => element.interactable || drawInteractable))
     .map((group) => createHintMarkerForGroup(group));
   // fill in marker text
   // const hintStrings = generateHintStrings(hintMarkers.length);
@@ -1544,8 +1569,12 @@ function createHintMarkersForGroups(groups) {
       }
     }
 
-    if (!interactableElementFound) {
+    if (!interactableElementFound && !drawInteractable) {
       hintMarker.hintString = "";
+    }
+
+    if (drawInteractable) {
+      hintMarker.hintString = hintMarker.group.elements[0].id;
     }
 
     try {
@@ -1584,7 +1613,7 @@ function createHintMarkerForGroup(group) {
   // Each group is assigned a different incremental z-index, we use the same z-index for the
   // bounding box and the hint marker
   el.style.zIndex = defaultZIndex
-
+  el.style.fontWeight = "bold";
   // The bounding box around the group of hints.
   const boundingBox = document.createElement("div");
 
@@ -1597,7 +1626,15 @@ function createHintMarkerForGroup(group) {
   boundingBox.style.height = group.rect.height + "px";
   boundingBox.style.bottom = boundingBox.style.top + boundingBox.style.height;
   boundingBox.style.right = boundingBox.style.left + boundingBox.style.width;
-  boundingBox.style.border = "2px solid blue"; // Change the border color as needed
+  if (group.elements.some((element) => element.tagName.toUpperCase() == "INPUT")) {
+    boundingBox.style.border = "2px solid red";
+  }
+  else if (group.elements.some((element) => element.interactable)) {
+    boundingBox.style.border = "2px solid green"; // Change the border color as needed
+  } else {
+    boundingBox.style.border = "2px solid blue"; // Change the border color as needed
+  }
+
   boundingBox.style.pointerEvents = "none"; // Ensures the box doesn't interfere with other interactions
   boundingBox.style.zIndex = defaultZIndex++;
 
@@ -1919,4 +1956,160 @@ function getIncrementElements() {
   }
 
   return [Array.from(idToElement.values()), cleanedTreeList];
+}
+
+
+const RESERVED_ATTRIBUTES = [
+  "accept",  // for input file
+  "alt",
+  "shape-description",  // for css shape
+  "aria-checked",  // for option tag
+  "aria-current",
+  "aria-label",
+  "aria-required",
+  "aria-role",
+  "aria-selected",  // for option tag
+  "checked",
+  "data-original-title",  // for bootstrap tooltip
+  "data-ui",
+  "disabled",  // for button
+  "aria-disabled",
+  "for",
+  "href",  // For a tags
+  "maxlength",
+  "name",
+  "pattern",
+  "placeholder",
+  "readonly",
+  "required",
+  "selected",  // for option tag
+  "src",  // do we need this?
+  "text-value",
+  "title",
+  "type",
+  "value",
+];
+
+const BASE64_INCLUDE_ATTRIBUTES = [
+  "href",
+  "src",
+  "poster",
+  "srcset",
+  "icon",
+];
+
+function _should_keep_unique_id(element) {
+  const attributes = element.attributes || {};
+  if (!('disabled' in attributes) && !('aria-disabled' in attributes)) {
+      return Boolean(element.interactable);
+  }
+
+  const disabled = attributes.disabled;
+  const aria_disabled = attributes['aria-disabled'];
+  if (disabled || aria_disabled) {
+      return true;
+  }
+  return Boolean(element.interactable);
+}
+
+function _trimmed_base64_data(attributes) {
+  const newAttributes = {};
+
+  for (const key in attributes) {
+      if (BASE64_INCLUDE_ATTRIBUTES.includes(key) && attributes[key].includes('data:')) {
+          continue;
+      }
+      newAttributes[key] = attributes[key];
+  }
+
+  return newAttributes;
+}
+
+function _trimmed_attributes(attributes) {
+  const newAttributes = {};
+
+  for (const key in attributes) {
+      if (key === 'role' && ['listbox', 'option'].includes(attributes[key])) {
+          newAttributes[key] = attributes[key];
+      }
+      if (RESERVED_ATTRIBUTES.includes(key)) {
+          newAttributes[key] = attributes[key];
+      }
+  }
+
+  return newAttributes;
+}
+
+function trim_element(element) {
+  const queue = [element];
+
+  while (queue.length > 0) {
+      const queueEle = queue.shift();
+      console.log(queueEle)
+      if ('frame' in queueEle) {
+          delete queueEle.frame;
+      }
+
+      if ('id' in queueEle && !_should_keep_unique_id(queueEle)) {
+          delete queueEle.id;
+      }
+
+      if ('attributes' in queueEle) {
+          let newAttributes = _trimmed_base64_data(queueEle.attributes);
+          if (Object.keys(newAttributes).length > 0) {
+              queueEle.attributes = newAttributes;
+          } else {
+              delete queueEle.attributes;
+          }
+      }
+
+      if ('attributes' in queueEle && !queueEle.keepAllAttr) {
+          let newAttributes = _trimmed_attributes(queueEle.attributes);
+          if (Object.keys(newAttributes).length > 0) {
+              queueEle.attributes = newAttributes;
+          } else {
+              delete queueEle.attributes;
+          }
+      }
+
+      if ('keepAllAttr' in queueEle) {
+          delete queueEle.keepAllAttr;
+      }
+
+      if ('children' in queueEle) {
+          queue.push(...queueEle.children);
+          if (queueEle.children.length === 0) {
+              delete queueEle.children;
+          }
+      }
+      console.log("'text' in queueEle",'text' in queueEle)
+      if ('text' in queueEle) {
+          const elementText = queueEle.text.trim();
+          if (elementText === '') {
+              delete queueEle.text;
+          }
+      }
+
+      if ('beforePseudoText' in queueEle && !queueEle.beforePseudoText) {
+          delete queueEle.beforePseudoText;
+      }
+
+      if ('afterPseudoText' in queueEle && !queueEle.afterPseudoText) {
+          delete queueEle.afterPseudoText;
+      }
+  }
+  return element;
+}
+
+function trim_element_tree(elements) {
+  elements.forEach(element => {
+      trim_element(element);
+  });
+  return elements;
+}
+
+
+function getPromptElements() {
+  return trim_element_tree(buildTreeFromBody()[0])
+
 }
