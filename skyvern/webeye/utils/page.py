@@ -170,7 +170,12 @@ class SkyvernFrame:
 
             if draw_boxes:
                 await skyvern_page.remove_bounding_boxes()
-
+                
+        # Save screenshots to local files
+        for i, screenshot in enumerate(screenshots):
+            filename = f"screenshot_{i+1}.png"
+            with open(filename, "wb") as file:
+                file.write(screenshot)
         return screenshots
 
     @classmethod

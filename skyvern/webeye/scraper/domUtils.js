@@ -2113,3 +2113,71 @@ function getPromptElements() {
   return trim_element_tree(buildTreeFromBody()[0])
 
 }
+
+
+// Function to build an HTML attribute string from a key-value pair
+function buildAttribute(key, value) {
+  if (typeof value === "boolean" || typeof value === "number") {
+      return `${key}="${String(value).toLowerCase()}"`;
+  }
+  return value ? `${key}="${String(value)}"` : key;
+}
+
+// Function to convert a JSON element to an HTML string
+function jsonToHtml(element, needSkyvernAttrs = true) {
+  // Return an empty string if the element is flagged as dropped
+  if (element.isDropped) {
+      return "";
+  }
+
+  // Make a deep copy of the attributes
+  let attributes = Object.assign({}, element.attributes || {});
+
+  if (needSkyvernAttrs) {
+      // Add the node attributes to the attributes
+      ELEMENT_NODE_ATTRIBUTES.forEach(attr => {
+          let value = element[attr];
+          if (value !== undefined) {
+              attributes[attr] = value;
+          }
+      });
+  }
+
+  // Build the attributes HTML string
+  let attributesHtml = Object.entries(attributes)
+      .map(([key, value]) => buildAttribute(key, value))
+      .join(" ");
+
+  let tag = element.tagName;
+  if (element.isSelectable) {
+      tag = "select";
+  }
+
+  let text = element.text || "";
+  // Build children HTML
+  let childrenHtml = (element.children || []).map(child => jsonToHtml(child)).join("");
+  // Build option HTML
+  let optionHtml = (element.options || [])
+      .map(option => `<option index="${option.optionIndex}">${option.text}</option>`)
+      .join("");
+
+  if (element.purgeable) {
+      return childrenHtml + optionHtml;
+  }
+
+  let beforePseudoText = element.beforePseudoText || "";
+  let afterPseudoText = element.afterPseudoText || "";
+
+  // Check if the element is self-closing
+  if (
+      ["img", "input", "br", "hr", "meta", "link"].includes(tag) &&
+      !optionHtml &&
+      !childrenHtml &&
+      !beforePseudoText &&
+      !afterPseudoText
+  ) {
+      return `<${tag}${attributesHtml ? " " + attributesHtml : ""}>`;
+  } else {
+      return `<${tag}${attributesHtml ? " " + attributesHtml : ""}>${beforePseudoText}${text}${childrenHtml + optionHtml}${afterPseudoText}</${tag}>`;
+  }
+}
