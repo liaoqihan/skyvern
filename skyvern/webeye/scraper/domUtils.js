@@ -1514,7 +1514,11 @@ function groupElementsVisually(elements) {
   return groups;
 }
 function getGroupElements() {
-  return groupElementsVisually(buildTreeFromBody()[0])
+  return groupElementsVisually(buildTreeFromBody()[0]);
+}
+
+function getHintMarkers() {
+  return createHintMarkersForGroups(getGroupElements());
 }
 
 
@@ -2110,7 +2114,7 @@ function trim_element_tree(elements) {
 
 
 function getPromptElements() {
-  return trim_element_tree(buildTreeFromBody()[0])
+  return trim_element_tree(buildTreeFromBody()[1])
 
 }
 

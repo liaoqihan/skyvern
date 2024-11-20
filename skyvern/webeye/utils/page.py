@@ -21,6 +21,7 @@ LOG = structlog.get_logger()
 def load_js_script() -> str:
     # TODO: Handle file location better. This is a hacky way to find the file location.
     path = f"{SKYVERN_DIR}/webeye/scraper/domUtils.js"
+    # path = f"{SKYVERN_DIR}/webeye/scraper/domUtilsOrigin.js"
     try:
         # TODO: Implement TS of domUtils.js and use the complied JS file instead of the raw JS file.
         # This will allow our code to be type safe.
